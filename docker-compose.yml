@@ -1,0 +1,72 @@
+"""Docker Compose configuration"""
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: interviai-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: interviai
+      MYSQL_USER: interviai_user
+      MYSQL_PASSWORD: interviai_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: interviai-backend
+    environment:
+      DATABASE_URL: mysql+pymysql://interviai_user:interviai_password@mysql:3306/interviai
+      SECRET_KEY: your-secret-key-change-in-production
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      DEBUG: "True"
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: interviai-frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  # Redis (optional, for caching)
+  redis:
+    image: redis:7-alpine
+    container_name: interviai-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql_data:
+
+networks:
+  default:
+    name: interviai-network
