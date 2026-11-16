@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { interviewService } from '../services/api';
 import { useInterview } from '../contexts/InterviewContext';
-import { Navbar } from '../components/Navbar';
 import {
   Play, Loader, AlertCircle, Building2, Code2,
   Users, Shuffle, ChevronRight, Sparkles, Target,
@@ -93,7 +92,14 @@ export const StartInterview = () => {
   const [interviewType, setInterviewType] = useState(defaultType);
   const [category, setCategory] = useState(CATEGORIES[defaultType][0]);
   const [difficulty, setDifficulty] = useState('MEDIUM');
-  const [company, setCompany] = useState(COMPANIES[0].id);
+  const [company, setCompany] = useState(location.state?.company || COMPANIES[0].id);
+  const [role, setRole] = useState('');
+  const [experience, setExperience] = useState('Fresher');
+  const [interviewRound, setInterviewRound] = useState('Technical');
+  const [skills, setSkills] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [questionCount, setQuestionCount] = useState(5);
+  const [duration, setDuration] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -118,7 +124,17 @@ export const StartInterview = () => {
         difficulty,
       };
       if (interviewType === 'COMPANY') {
-        payload.session_metadata = { company, company_mode: true };
+        Object.assign(payload, {
+          company,
+          role: role.trim() || category,
+          experience,
+          interview_round: interviewRound,
+          skills: skills.split(',').map((skill) => skill.trim()).filter(Boolean),
+          job_description: jobDescription.trim() || null,
+          question_count: Number(questionCount),
+          interview_duration_minutes: Number(duration),
+          session_metadata: { company_mode: true, monitoring_enabled: false },
+        });
       }
       const res = await interviewService.startInterview(payload);
       // Attach company info to session for question generation
@@ -134,7 +150,6 @@ export const StartInterview = () => {
 
   return (
     <>
-      <Navbar />
       <div className="min-h-screen bg-slate-950 py-10 px-4">
         <div className="mx-auto max-w-3xl">
 
@@ -208,6 +223,46 @@ export const StartInterview = () => {
                   </button>
                 ))}
               </div>
+            </Section>
+          )}
+
+          {interviewType === 'COMPANY' && (
+            <Section step="3" title="Role and Interview Details" icon={FileText}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm text-slate-300">
+                  Job role
+                  <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="e.g. Java Developer" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Experience level
+                  <select value={experience} onChange={(event) => setExperience(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white">
+                    {['Fresher', '0-2 years', '3-5 years', '6+ years'].map((value) => <option key={value}>{value}</option>)}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-300">
+                  Interview round
+                  <select value={interviewRound} onChange={(event) => setInterviewRound(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white">
+                    {['Technical', 'Behavioral', 'Coding', 'System Design', 'HR'].map((value) => <option key={value}>{value}</option>)}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-300">
+                  Technical skills (comma separated)
+                  <input value={skills} onChange={(event) => setSkills(event.target.value)} placeholder="Java, Spring Boot, SQL, REST APIs" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Number of questions
+                  <input type="number" min="1" max="20" value={questionCount} onChange={(event) => setQuestionCount(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Interview duration (minutes)
+                  <input type="number" min="1" max="240" value={duration} onChange={(event) => setDuration(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+                </label>
+              </div>
+              <label className="mt-4 block text-sm text-slate-300">
+                Job description (optional)
+                <textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} rows={3} placeholder="Paste a job description to tailor question topics." className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+              </label>
+              <p className="mt-3 text-xs text-slate-500">Webcam, eye-contact scoring, and behavioral monitoring are not enabled for this practice interview.</p>
             </Section>
           )}
 

@@ -201,6 +201,10 @@ class Resume(Base):
 
     user = relationship("User", backref="resumes")
 
+    @property
+    def extraction_status(self):
+        return "completed" if self.resume_text and self.resume_text.strip() else "unavailable"
+
 
 # ==================== Webcam / Behavior Models ====================
 

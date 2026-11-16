@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 import os
 
 from app.database import get_db
-from app.models.models import User, EnhancedInterviewReport, InterviewSession
+from app.models.models import User, EnhancedInterviewReport, InterviewSession, Question
 from app.utils.auth import get_current_user
 from app.services.report_service import generate_enhanced_report
 
@@ -26,7 +26,7 @@ async def generate_report(
         raise HTTPException(status_code=404, detail="Session not found.")
 
     report = generate_enhanced_report(session_id, current_user.id, db)
-    return _serialize(report)
+    return _serialize(report, db)
 
 
 @router.get("/{session_id}")
@@ -41,7 +41,7 @@ async def get_report(
     ).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found. Generate it first.")
-    return _serialize(report)
+    return _serialize(report, db)
 
 
 @router.get("/{session_id}/pdf")
@@ -63,7 +63,10 @@ async def download_pdf(
     )
 
 
-def _serialize(r: EnhancedInterviewReport) -> dict:
+def _serialize(r: EnhancedInterviewReport, db: Session) -> dict:
+    questions = db.query(Question).filter(
+        Question.session_id == r.session_id
+    ).order_by(Question.id).all()
     return {
         "id": r.id,
         "session_id": r.session_id,
@@ -81,6 +84,24 @@ def _serialize(r: EnhancedInterviewReport) -> dict:
         "topics_to_improve": r.topics_to_improve,
         "learning_recommendations": r.learning_recommendations,
         "ai_summary": r.ai_summary,
+        "question_feedback": [
+            {
+                "question": question.question_text,
+                "category": question.category,
+                "difficulty": question.difficulty,
+                "answer": answer.user_answer,
+                "score": answer.score,
+                "technical_accuracy": answer.technical_accuracy,
+                "completeness": answer.completeness,
+                "clarity": answer.clarity,
+                "communication_score": answer.communication_score,
+                "feedback": answer.ai_feedback,
+                "strengths": answer.strengths,
+                "improvements": answer.improvements,
+            }
+            for question in questions
+            for answer in question.answers
+        ],
         "has_pdf": bool(r.pdf_path),
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }

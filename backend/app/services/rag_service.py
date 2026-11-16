@@ -4,9 +4,8 @@ RAG service — Resume + JD ingestion, chunking, retrieval, question generation.
 import json
 import re
 from typing import List, Dict, Optional
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 from app.services.vector_service import upsert_documents, similarity_search, delete_by_metadata
 
 CHUNK_SIZE = 400
@@ -67,7 +66,7 @@ def generate_rag_questions(
     asked_questions: Optional[List[str]] = None,
 ) -> Dict:
     """Generate interview questions grounded in resume + JD context."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     resume_ctx = retrieve_resume_context(user_id, "skills experience projects education")
     jd_ctx = retrieve_jd_context(user_id, "required skills responsibilities qualifications")
@@ -124,7 +123,7 @@ def evaluate_answer_with_context(
     category: str,
 ) -> Dict:
     """Evaluate answer using resume + JD as grounding context."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
     resume_ctx = retrieve_resume_context(user_id, question, k=3)
     jd_ctx = retrieve_jd_context(user_id, question, k=2)
 

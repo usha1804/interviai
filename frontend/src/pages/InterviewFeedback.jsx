@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useInterview } from '../contexts/InterviewContext';
-import { interviewService } from '../services/api';
-import { CheckCircle, XCircle, Lightbulb, ArrowRight, Flag } from 'lucide-react';
+import { interviewService, reportService } from '../services/api';
+import { CheckCircle, XCircle, Lightbulb, ArrowRight, Flag, AlertCircle, Loader } from 'lucide-react';
 
 const ScoreBar = ({ label, value }) => (
   <div className="mb-3">
@@ -23,7 +23,10 @@ export const InterviewFeedback = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentSession, setCurrentQuestion, resetInterview } = useInterview();
-  const { answer, isLastQuestion } = location.state || {};
+  const { answer, isLastQuestion, currentQuestionId } = location.state || {};
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const actionLockRef = useRef(false);
 
   if (!answer) {
     navigate('/dashboard');
@@ -31,31 +34,62 @@ export const InterviewFeedback = () => {
   }
 
   const handleNextQuestion = async () => {
+    if (actionLockRef.current || !currentSession || !currentQuestionId) return;
+    actionLockRef.current = true;
+    setLoading(true);
+    setError('');
     try {
-      const cat = currentSession.interview_type === 'MIXED'
-        ? ['Java', 'Python', 'SQL', 'Behavioral'][Math.floor(Math.random() * 4)]
-        : currentSession.interview_type === 'HR' ? 'Behavioral' : 'Technical';
-
-      const res = await interviewService.generateQuestion(
+      const res = await interviewService.nextQuestion(
         currentSession.id,
-        cat,
-        'MEDIUM',
+        currentQuestionId,
+        'answered',
       );
-      setCurrentQuestion(res.data);
+      const response = res.data?.data && typeof res.data.data === 'object'
+        ? res.data.data
+        : res.data;
+      const nestedQuestion = response?.question && typeof response.question === 'object'
+        ? response.question
+        : response;
+      const question = {
+        ...nestedQuestion,
+        ...response,
+        id: response?.id ?? response?.question_id ?? nestedQuestion?.id ?? nestedQuestion?.question_id,
+        question_text: typeof response?.question_text === 'string'
+          ? response.question_text
+          : typeof response?.question === 'string'
+            ? response.question
+            : nestedQuestion?.question_text,
+      };
+      if (!question.id) throw new Error('The server response did not include a question ID.');
+      if (typeof question.question_text !== 'string' || !question.question_text.trim()) {
+        throw new Error('The server response did not include question text.');
+      }
+      setCurrentQuestion(question);
       navigate('/interview/session');
-    } catch {
-      navigate('/interview/session');
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || requestError.message || 'The next question could not be generated. Please retry.');
+    } finally {
+      setLoading(false);
+      actionLockRef.current = false;
     }
   };
 
   const handleEndInterview = async () => {
+    if (actionLockRef.current || !currentSession) return;
+    actionLockRef.current = true;
+    setLoading(true);
+    setError('');
     try {
       await interviewService.endInterview(currentSession.id);
-    } catch {
-      // still navigate even if end call fails
+      await reportService.generate(currentSession.id);
+      navigate(`/interviews/report/${currentSession.id}`);
+      resetInterview();
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'The final report could not be generated. Please retry.');
+    } finally {
+      setLoading(false);
+      actionLockRef.current = false;
     }
-    resetInterview();
-    navigate('/dashboard');
   };
 
   return (
@@ -113,20 +147,23 @@ export const InterviewFeedback = () => {
         </div>
 
         {/* Actions */}
+        {error && <div role="alert" className="mb-4 flex gap-2 rounded-lg border border-red-800 bg-red-900/20 p-3 text-sm text-red-300"><AlertCircle size={16} />{error}</div>}
         <div className="flex gap-4">
           {!isLastQuestion ? (
             <button
               onClick={handleNextQuestion}
+              disabled={loading}
               className="flex-1 btn-primary py-4 flex items-center justify-center gap-2 font-semibold"
             >
-              Next Question <ArrowRight size={18} />
+              {loading ? <Loader size={18} className="animate-spin" /> : <>Next Question <ArrowRight size={18} /></>}
             </button>
           ) : null}
           <button
             onClick={handleEndInterview}
+            disabled={loading}
             className="flex-1 btn-secondary py-4 flex items-center justify-center gap-2 font-semibold"
           >
-            <Flag size={18} /> End Interview
+          {loading ? <Loader size={18} className="animate-spin" /> : <><Flag size={18} /> Finish & View Report</>}
           </button>
         </div>
       </div>

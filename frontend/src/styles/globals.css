@@ -1,43 +1,80 @@
-/* Frontend Tailwind CSS styles */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar */
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111827;
+  background: #f8fafc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  min-width: 320px;
+  background: #f8fafc;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  color: #111827;
+  background: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4f46e5;
-  border-radius: 4px;
+  border-radius: 999px;
+  background: #cbd5e1;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6366f1;
+  background: #94a3b8;
 }
 
-/* Glassmorphism effect */
-.glass {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(100, 116, 139, 0.2);
-}
-
-/* Gradient text */
 .gradient-text {
-  @apply bg-gradient-to-r from-indigo-500 to-pink-500 bg-clip-text text-transparent;
+  @apply bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent;
 }
 
-/* Smooth animations */
+.fade-in {
+  animation: fadeIn 180ms ease-out;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -45,20 +82,64 @@
   }
 }
 
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-/* Button styles */
 .btn-primary {
-  @apply bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors;
+  @apply rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700;
 }
 
 .btn-secondary {
-  @apply bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition-colors;
+  @apply rounded-lg border border-slate-200 bg-white px-4 py-2 font-medium text-slate-700 transition-colors hover:bg-slate-50;
 }
 
-/* Card styles */
 .card {
-  @apply glass rounded-xl p-6 border border-slate-700;
+  @apply rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/[0.03];
+}
+
+.app-main .min-h-screen {
+  min-height: auto;
+}
+
+.app-main [class~="bg-slate-950"],
+.app-main [class~="bg-dark"] {
+  background-color: #f8fafc;
+}
+
+.app-main [class~="bg-slate-950/60"],
+.app-main [class~="bg-slate-950/50"],
+.app-main [class~="bg-slate-950/40"],
+.app-main [class~="bg-slate-900"],
+.app-main [class~="bg-slate-900/80"],
+.app-main [class~="bg-slate-900/70"],
+.app-main [class~="bg-slate-900/60"],
+.app-main [class~="bg-slate-900/50"] {
+  background-color: #fff;
+}
+
+.app-main [class~="bg-slate-800"],
+.app-main [class~="bg-slate-800/80"],
+.app-main [class~="bg-slate-800/60"],
+.app-main [class~="bg-slate-800/50"] {
+  background-color: #f1f5f9;
+}
+
+.app-main .text-white {
+  color: #111827;
+}
+
+.app-main button.text-white,
+.app-main a.text-white,
+.app-main button .text-white {
+  color: #fff;
+}
+
+.app-main .text-slate-100,
+.app-main .text-slate-200,
+.app-main .text-slate-300,
+.app-main .text-slate-400 {
+  color: #475569;
+}
+
+.app-main [class~="border-slate-800"],
+.app-main [class~="border-slate-700"],
+.app-main [class~="border-slate-600"] {
+  border-color: #e2e8f0;
 }

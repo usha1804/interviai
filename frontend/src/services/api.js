@@ -93,11 +93,18 @@ export const authService = {
 export const interviewService = {
   startInterview: (data) => api.post('/interview/start', data),
   generateQuestion: (sessionId, category, difficulty) =>
-    api.post(`/interview/generate-question/${sessionId}`, { category, difficulty }),
-  submitAnswer: (data) => api.post('/interview/submit-answer', data),
+    api.post(`/interview/generate-question/${sessionId}`, { category, difficulty }, { timeout: 75000 }),
+  nextQuestion: (sessionId, currentQuestionId = null, action = 'start') =>
+    api.post(`/interview/next-question/${sessionId}`, {
+      current_question_id: currentQuestionId,
+      action,
+    }, { timeout: 75000 }),
+  skipQuestion: (sessionId, questionId) =>
+    api.post(`/interview/skip-question/${sessionId}`, { question_id: questionId }),
+  submitAnswer: (data) => api.post('/interview/submit-answer', data, { timeout: 45000 }),
   endInterview: (sessionId) => api.post(`/interview/end/${sessionId}`),
   getSession: (sessionId) => api.get(`/interview/session/${sessionId}`),
-  getQuestions: (sessionId) => api.get(`/interview/questions/${sessionId}`),
+  getQuestions: (sessionId) => api.get(`/interview/questions/${sessionId}`, { timeout: 75000 }),
   getAnswer: (answerId) => api.get(`/interview/answer/${answerId}`),
 };
 
@@ -134,7 +141,10 @@ export const codingService = {
 
 export const resumeService = {
   upload: (formData) =>
-    api.post('/resume/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    api.post('/resume/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 75000,
+    }),
   getLatest: () => api.get('/resume/latest'),
   getAll: () => api.get('/resume/all'),
   delete: (id) => api.delete(`/resume/${id}`),
@@ -143,14 +153,14 @@ export const resumeService = {
 };
 
 export const atsService = {
-  analyze: (data) => api.post('/ats/analyze', data),
+  analyze: (data) => api.post('/ats/analyze', data, { timeout: 75000 }),
   getReports: () => api.get('/ats/reports'),
   downloadPdf: (reportId) => api.get(`/ats/report/${reportId}/pdf`, { responseType: 'blob' }),
 };
 
 export const adaptiveService = {
-  nextQuestion: (data) => api.post('/adaptive/next-question', data),
-  submitAnswer: (data) => api.post('/adaptive/submit-answer', data),
+  nextQuestion: (data) => api.post('/adaptive/next-question', data, { timeout: 45000 }),
+  submitAnswer: (data) => api.post('/adaptive/submit-answer', data, { timeout: 45000 }),
 };
 
 export const githubService = {
@@ -168,8 +178,14 @@ export const systemDesignService = {
 
 export const voiceService = {
   start: (data) => api.post('/voice/start', data),
+  getSession: (sessionId) => api.get(`/voice/session/${sessionId}`),
   tts: (data) => api.post('/voice/tts', data, { responseType: 'blob' }),
-  stt: (sessionId, formData) => api.post(`/voice/stt/${sessionId}`, formData),
+  stt: (sessionId, formData) => api.post(`/voice/stt/${sessionId}`, formData, {
+    headers: { 'Content-Type': undefined },
+    timeout: 120000,
+  }),
+  retryEvaluation: (sessionId) => api.post(`/voice/evaluate/${sessionId}`, {}, { timeout: 75000 }),
+  next: (sessionId) => api.post(`/voice/next/${sessionId}`, {}, { timeout: 75000 }),
   end: (sessionId) => api.post(`/voice/end/${sessionId}`),
 };
 

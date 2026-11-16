@@ -3,9 +3,8 @@ Career Coach service — skill gap, resume match, learning plans, hiring probabi
 """
 import json
 from typing import Dict, Optional
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 from app.services.rag_service import retrieve_resume_context, retrieve_jd_context
 
 
@@ -18,7 +17,7 @@ def analyze_career(
     communication_score: Optional[float] = None,
 ) -> Dict:
     """Full career coach analysis."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     resume_ctx = retrieve_resume_context(user_id, "skills experience projects education") or resume_text[:2000]
     jd_ctx = retrieve_jd_context(user_id, "required skills responsibilities") or (jd_text or "")[:2000]

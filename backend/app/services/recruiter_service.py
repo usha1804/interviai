@@ -5,9 +5,8 @@ Provides recruiter-facing data: candidate list, profiles, scores, hiring decisio
 import json
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 from app.models.models import (
     User, InterviewSession, Answer, Question,
     CodingSession, ATSReport, GitHubAnalysis,
@@ -106,7 +105,7 @@ def get_candidate_profile(candidate_id: int, db: Session) -> Dict:
 def generate_hiring_decision(candidate_id: int, db: Session) -> Dict:
     """AI-generated hiring decision based on all available data."""
     profile = get_candidate_profile(candidate_id, db)
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     prompt = f"""You are a Senior Hiring Manager making a hiring decision.
 

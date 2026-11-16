@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Navbar } from '../components/Navbar';
 import api from '../services/api';
 import {
   Users, Search, Loader, AlertCircle, ChevronRight,
@@ -82,7 +81,6 @@ export const RecruiterDashboard = () => {
 
   return (
     <>
-      <Navbar />
       <div className="min-h-screen bg-slate-950 py-8 px-4">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex items-center justify-between">

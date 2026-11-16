@@ -13,15 +13,14 @@ import tempfile
 import os
 import sys
 import shutil
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 
 
 # ── Problem Generation ────────────────────────────────────────────
 
 def generate_coding_problem(topic: str, difficulty: str = "MEDIUM") -> dict:
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
     prompt = f"""You are a senior software engineer creating a coding interview problem.
 
 Topic: {topic}
@@ -318,7 +317,7 @@ def run_test_cases(code: str, language: str, test_cases: list) -> dict:
 # ── AI Code Review ────────────────────────────────────────────────
 
 def ai_review_code(problem: str, code: str, language: str, test_result: dict) -> dict:
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
     prompt = f"""You are a Senior Software Engineer reviewing a coding interview submission.
 
 Problem: {problem}

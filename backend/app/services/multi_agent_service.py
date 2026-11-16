@@ -8,15 +8,14 @@ Agent 4 — PerformanceAgent : full interview analysis, skill matrix, hiring rec
 Coordinator                : orchestrates the pipeline
 """
 import json
+import logging
 from typing import List, Dict, Optional
-from groq import Groq
+from fastapi import HTTPException
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
+from app.services.report_prompt_utils import estimate_prompt_tokens
 
-
-def _client() -> Groq:
-    return Groq(api_key=settings.GROQ_API_KEY)
-
+logger = logging.getLogger(__name__)
 
 # ── Agent 1: Question Generator ───────────────────────────────────
 
@@ -45,7 +44,7 @@ Already Asked (do NOT repeat):
 
 Generate ONE specific, insightful {question_type} interview question grounded in the context above.
 Return ONLY the question text."""
-        return _chat(_client(), settings.GROQ_MODEL, prompt, max_tokens=300)
+        return _chat(get_groq_client(), settings.GROQ_MODEL, prompt, max_tokens=300)
 
 
 # ── Agent 2: Answer Evaluator ─────────────────────────────────────
@@ -79,16 +78,20 @@ Score each dimension 0-10. Return ONLY this JSON:
     "resume_alignment": <0-10>,
     "raw_feedback": "<one sentence>"
 }}"""
-        text = _chat(_client(), settings.GROQ_MODEL, prompt, max_tokens=600)
+        text = _chat(get_groq_client(), settings.GROQ_MODEL, prompt, max_tokens=600)
         try:
             s, e = text.find("{"), text.rfind("}") + 1
-            return json.loads(text[s:e])
-        except Exception:
-            return {
-                "score": 5.0, "technical_accuracy": 5.0, "completeness": 5.0,
-                "clarity": 5.0, "communication_score": 5.0, "resume_alignment": 5.0,
-                "raw_feedback": "Evaluation unavailable.",
-            }
+            if s < 0 or e <= s:
+                raise ValueError("Evaluation response did not contain JSON.")
+            evaluation = json.loads(text[s:e])
+            if not isinstance(evaluation, dict):
+                raise ValueError("Evaluation response must be a JSON object.")
+            for field in ("score", "technical_accuracy", "completeness", "clarity", "communication_score"):
+                if not isinstance(evaluation.get(field), (int, float)) or not 0 <= evaluation[field] <= 10:
+                    raise ValueError(f"Evaluation response has an invalid {field}.")
+            return evaluation
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="AI evaluation failed. Please retry.") from exc
 
 
 # ── Agent 3: Feedback Generator ───────────────────────────────────
@@ -115,25 +118,44 @@ Return ONLY this JSON:
     "ideal_answer": "<model answer 3-5 sentences>",
     "detailed_feedback": "<2-3 paragraph coaching feedback>"
 }}"""
-        text = _chat(_client(), settings.GROQ_MODEL, prompt, max_tokens=1200)
+        text = _chat(get_groq_client(), settings.GROQ_MODEL, prompt, max_tokens=1200)
         try:
             s, e = text.find("{"), text.rfind("}") + 1
-            return json.loads(text[s:e])
-        except Exception:
-            return {
-                "strengths": ["Attempted the question"],
-                "weaknesses": ["Needs more depth"],
-                "improvement_suggestions": ["Study core concepts", "Practice with examples"],
-                "learning_resources": [],
-                "ideal_answer": "N/A",
-                "detailed_feedback": "Please review the topic and try again.",
-            }
+            if s < 0 or e <= s:
+                raise ValueError("Feedback response did not contain JSON.")
+            feedback = json.loads(text[s:e])
+            if not isinstance(feedback, dict) or not isinstance(feedback.get("detailed_feedback"), str):
+                raise ValueError("Feedback response is incomplete.")
+            return feedback
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="AI feedback generation failed. Please retry.") from exc
 
 
 # ── Agent 4: Performance Analyzer ────────────────────────────────
 
 class PerformanceAgent:
     """Analyzes full interview, generates skill matrix and hiring recommendation."""
+
+    def build_prompt(
+        self,
+        answers_data: List[Dict],
+        interview_type: str,
+        resume_context: str,
+        jd_context: str,
+    ) -> str:
+        report_input = {
+            "interview_type": interview_type,
+            "resume_context": resume_context,
+            "job_description_context": jd_context,
+            "responses": answers_data,
+        }
+        return """Analyze the interview data and return only one JSON object. Use the existing per-answer scores as evidence and do not invent facts.
+Required fields: overall_score, technical_score, communication_score, hiring_probability (0-100);
+hiring_recommendation (STRONG_YES|YES|MAYBE|NO); skill_matrix (object of 0-100 scores);
+radar_chart_data (array of {subject,score}); strengths, weaknesses, topics_to_improve,
+learning_recommendations (arrays of strings); ai_summary (string); interview_readiness (0-100).
+Interview data:
+""" + json.dumps(report_input, ensure_ascii=False, separators=(",", ":"))
 
     def run(
         self,
@@ -142,50 +164,38 @@ class PerformanceAgent:
         resume_context: str,
         jd_context: str,
     ) -> Dict:
-        summary = "\n".join(
-            f"Q{i+1}: {d['question']}\nA: {d['answer']}\nScore: {d['score']}/10"
-            for i, d in enumerate(answers_data)
+        prompt = self.build_prompt(answers_data, interview_type, resume_context, jd_context)
+        logger.info(
+            "Report analysis prompt estimated_input_tokens=%s response_entries=%s",
+            estimate_prompt_tokens(prompt, settings.GROQ_MODEL),
+            len(answers_data),
         )
-        prompt = f"""You are a hiring manager analyzing a complete interview.
-
-Interview Type: {interview_type}
-Resume Context: {resume_context or "N/A"}
-JD Context: {jd_context or "N/A"}
-
-Interview Transcript:
-{summary}
-
-Return ONLY this JSON:
-{{
-    "overall_score": <0-100>,
-    "technical_score": <0-100>,
-    "communication_score": <0-100>,
-    "confidence_score": <0-100>,
-    "hiring_probability": <0-100>,
-    "hiring_recommendation": "<STRONG_YES|YES|MAYBE|NO>",
-    "skill_matrix": {{"<skill>": <0-100>}},
-    "radar_chart_data": [{{"subject": "<dim>", "score": <0-100>}}],
-    "strengths": ["<s1>", "<s2>", "<s3>"],
-    "weaknesses": ["<w1>", "<w2>", "<w3>"],
-    "topics_to_improve": ["<t1>", "<t2>", "<t3>"],
-    "learning_recommendations": ["<r1>", "<r2>", "<r3>"],
-    "ai_summary": "<3-4 sentence executive summary>",
-    "interview_readiness": <0-100>
-}}"""
-        text = _chat(_client(), settings.GROQ_MODEL, prompt, max_tokens=2000)
+        text = _chat(get_groq_client(), settings.GROQ_MODEL, prompt, max_tokens=2000)
         try:
             s, e = text.find("{"), text.rfind("}") + 1
-            return json.loads(text[s:e])
-        except Exception:
-            return {
-                "overall_score": 60, "technical_score": 60, "communication_score": 60,
-                "confidence_score": 60, "hiring_probability": 50,
-                "hiring_recommendation": "MAYBE",
-                "skill_matrix": {}, "radar_chart_data": [],
-                "strengths": [], "weaknesses": [], "topics_to_improve": [],
-                "learning_recommendations": [],
-                "ai_summary": "Analysis unavailable.", "interview_readiness": 50,
-            }
+            if s < 0 or e <= s:
+                raise ValueError("Performance analysis response did not contain JSON.")
+            analysis = json.loads(text[s:e])
+            if not isinstance(analysis, dict):
+                raise ValueError("Performance analysis response must be a JSON object.")
+            for field in ("overall_score", "technical_score", "communication_score", "hiring_probability"):
+                if not isinstance(analysis.get(field), (int, float)) or not 0 <= analysis[field] <= 100:
+                    raise ValueError(f"Performance analysis response has an invalid {field}.")
+            if not isinstance(analysis.get("ai_summary"), str):
+                raise ValueError("Performance analysis response is missing its summary.")
+            if analysis.get("hiring_recommendation") not in {"STRONG_YES", "YES", "MAYBE", "NO"}:
+                raise ValueError("Performance analysis response has an invalid recommendation.")
+            if not isinstance(analysis.get("skill_matrix"), dict):
+                raise ValueError("Performance analysis response has an invalid skill matrix.")
+            for field in (
+                "radar_chart_data", "strengths", "weaknesses",
+                "topics_to_improve", "learning_recommendations",
+            ):
+                if not isinstance(analysis.get(field), list):
+                    raise ValueError(f"Performance analysis response has invalid {field}.")
+            return analysis
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="AI report generation failed. Please retry.") from exc
 
 
 # ── Coordinator ───────────────────────────────────────────────────

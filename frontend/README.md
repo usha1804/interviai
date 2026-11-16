@@ -11,7 +11,9 @@ Modern, responsive single-page application for practicing interviews with AI-gen
 - 🎯 Interactive interview sessions
 - 🤖 AI-generated questions and feedback
 - 📊 Real-time performance analytics
-- 🌙 Dark theme with glassmorphism design
+- ✨ Responsive SaaS workspace with a reusable sidebar and top navigation
+- 📈 Light design system with shared cards, page headers, and empty states
+- 🧭 Searchable navigation, account menu, and mobile sidebar drawer
 - 📱 Fully responsive design
 - ⚡ Fast development with Vite
 - 🎨 Beautiful UI with Tailwind CSS
@@ -78,13 +80,18 @@ frontend/
 │   ├── components/
 │   │   ├── Navbar.jsx              # Navigation bar
 │   │   ├── ProtectedRoute.jsx      # Auth guard
-│   │   └── ...other components
+│   │   ├── FeatureCard.jsx         # Shared feature entry card
+│   │   ├── PageHeader.jsx          # Shared page heading
+│   │   └── layout/                 # Authenticated app shell
 │   ├── pages/
 │   │   ├── Landing.jsx             # Landing page
 │   │   ├── Login.jsx               # Login page
 │   │   ├── Signup.jsx              # Registration page
 │   │   ├── Dashboard.jsx           # User dashboard
 │   │   ├── InterviewSession.jsx    # Interview page
+│   │   ├── InterviewHistory.jsx    # Searchable interview history
+│   │   ├── AdaptiveInterview.jsx    # Adaptive interview flow
+│   │   ├── CareerCoach.jsx          # Career analysis
 │   │   └── Analytics.jsx           # Analytics page
 │   ├── services/
 │   │   └── api.js                  # API client

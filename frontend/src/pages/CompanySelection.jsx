@@ -1,69 +1,112 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Building2, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Navbar } from '../components/Navbar';
+import { PageHeader } from '../components/PageHeader';
 import { ragService } from '../services/api';
 
-const COMPANY_OPTIONS = [
-  'Google', 'Amazon', 'Microsoft', 'Meta', 'Apple', 'Netflix', 'Accenture', 'TCS',
-  'Infosys', 'Wipro', 'Capgemini', 'Deloitte', 'Cognizant', 'IBM', 'Oracle',
-  'Salesforce', 'Adobe', 'Uber', 'Flipkart', 'Atlassian'
-];
-
 export const CompanySelection = () => {
-  const [companies, setCompanies] = useState(COMPANY_OPTIONS);
-  const [selected, setSelected] = useState('Google');
+  const [companies, setCompanies] = useState([]);
+  const [selected, setSelected] = useState('');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    ragService.listCompanies().then((res) => {
-      if (Array.isArray(res?.data?.companies)) {
-        setCompanies(res.data.companies);
-      }
-    }).finally(() => setLoading(false));
+    let active = true;
+    ragService.listCompanies()
+      .then(({ data }) => {
+        if (!active) return;
+        const availableCompanies = Array.isArray(data?.companies) ? data.companies : [];
+        setCompanies(availableCompanies);
+        setSelected(availableCompanies[0] || '');
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError.response?.data?.detail || 'Supported companies could not be loaded.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
   }, []);
 
+  const filteredCompanies = useMemo(() => {
+    const searchTerm = query.trim().toLowerCase();
+    return companies.filter((company) => company.toLowerCase().includes(searchTerm));
+  }, [companies, query]);
+
   return (
-    <>
-      <Navbar />
-      <div className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold">Company-Specific Interview Engine</h1>
-            <p className="mt-2 text-slate-400">Select a company to start a RAG-grounded interview flow.</p>
+    <div className="pb-8">
+      <PageHeader
+        eyebrow="Interview suite"
+        title="Company interview"
+        description="Select a company supported by this workspace to start a focused practice session."
+      />
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/[0.02] sm:p-6">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-900">Available companies</h3>
+            <p className="mt-1 text-sm text-slate-500">Options are loaded from the interview service.</p>
           </div>
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 sm:w-64">
+            <Search className="h-4 w-4 text-slate-400" />
+            <input
+              aria-label="Search companies"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search companies"
+              className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+            />
+          </label>
+        </div>
 
-          {loading ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-400">Loading supported companies…</div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {companies.map((company) => (
-                <button
-                  key={company}
-                  onClick={() => setSelected(company)}
-                  className={`rounded-2xl border p-4 text-left transition ${selected === company ? 'border-amber-500 bg-amber-500/10 text-amber-300' : 'border-slate-800 bg-slate-900/70 text-slate-200 hover:border-slate-600'}`}
-                >
-                  <div className="font-semibold">{company}</div>
-                  <div className="mt-2 text-sm text-slate-400">Company-specific interview questions and guidance</div>
-                </button>
-              ))}
-            </div>
-          )}
+        {error && <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <div>
-              <div className="text-sm text-slate-400">Selected company</div>
-              <div className="font-semibold text-white">{selected}</div>
-            </div>
+        {loading ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading companies">
+            {[1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl bg-slate-100" />)}
+          </div>
+        ) : !error && !filteredCompanies.length ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+            <Building2 className="mx-auto h-6 w-6 text-slate-400" />
+            <p className="mt-3 text-sm font-medium text-slate-800">{companies.length ? 'No company matches your search' : 'No companies are currently available'}</p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredCompanies.map((company) => (
+              <button
+                key={company}
+                type="button"
+                onClick={() => setSelected(company)}
+                aria-pressed={selected === company}
+                className={`flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left transition ${
+                  selected === company
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                    : 'border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-600 ring-1 ring-slate-200"><Building2 className="h-4 w-4" /></span>
+                <span className="font-medium">{company}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-col gap-4 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-xs leading-5 text-slate-500">
+            Practice prompts are generated through this application. This is not a confidential or official company question bank.
+          </p>
+          {selected && !error && (
             <Link
               to="/interview/new"
               state={{ type: 'COMPANY', company: selected }}
-              className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 font-semibold text-white"
+              className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
             >
-              Start Company Interview
+              Practice for {selected}
             </Link>
-          </div>
+          )}
         </div>
-      </div>
-    </>
+      </section>
+    </div>
   );
 };

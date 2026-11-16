@@ -5,9 +5,8 @@ Evaluates answers on architecture, scalability, trade-offs, and tech choices.
 """
 import json
 from typing import Dict, List, Optional
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 
 SYSTEM_DESIGN_TOPICS = {
     "URL Shortener": "Design a URL shortening service like bit.ly",
@@ -35,7 +34,7 @@ QUESTION_CATEGORIES = [
 
 def generate_system_design_questions(topic: str, difficulty: str = "MEDIUM") -> List[Dict]:
     """Generate a set of system design questions for a given topic."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
     topic_desc = SYSTEM_DESIGN_TOPICS.get(topic, f"Design a {topic} system")
 
     prompt = f"""You are a Senior System Design Interviewer at a top tech company.
@@ -78,7 +77,7 @@ def evaluate_system_design_answer(
     question_category: str,
 ) -> Dict:
     """Evaluate a system design answer across multiple dimensions."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     prompt = f"""You are a Senior System Design Interviewer evaluating a candidate's answer.
 
@@ -121,7 +120,7 @@ Return ONLY this JSON:
 
 def generate_final_system_design_report(topic: str, qa_pairs: List[Dict]) -> Dict:
     """Generate overall system design performance report."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
     summary = "\n".join(
         f"Q: {p['question']}\nA: {p['answer']}\nScore: {p.get('score', 0)}/10"
         for p in qa_pairs

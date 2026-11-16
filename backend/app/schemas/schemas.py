@@ -1,7 +1,13 @@
 """Pydantic schemas for request/response validation"""
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+def _normalize_email(value):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Email is required.")
+    return value.strip()
 
 
 # ==================== User Schemas ====================
@@ -10,6 +16,11 @@ class UserBase(BaseModel):
     """Base user schema"""
     name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return _normalize_email(value)
 
 
 class UserCreate(UserBase):
@@ -21,6 +32,18 @@ class UserLogin(BaseModel):
     """User login schema"""
     email: EmailStr
     password: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_login_email(cls, value):
+        return _normalize_email(value)
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def validate_login_password(cls, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Password is required.")
+        return value
 
 
 class UserResponse(UserBase):
@@ -75,12 +98,23 @@ class QuestionCreate(BaseModel):
 class QuestionResponse(BaseModel):
     """Question response schema"""
     id: int
+    question_id: Optional[int] = None
     session_id: int
     question_text: str
     category: str
     difficulty: str
     question_type: str
     created_at: datetime
+    question_number: Optional[int] = None
+    total_questions: Optional[int] = None
+    topic: Optional[str] = None
+    context: Optional[str] = None
+    evaluation_criteria: Optional[List[str]] = None
+    company_specific: Optional[bool] = None
+    question: Optional[str] = None
+    status: Optional[str] = None
+    is_answered: Optional[bool] = None
+    is_skipped: Optional[bool] = None
     
     class Config:
         from_attributes = True
@@ -125,6 +159,10 @@ class InterviewSessionStart(BaseModel):
     role: Optional[str] = None
     experience: Optional[str] = None
     skills: Optional[List[str]] = None
+    job_description: Optional[str] = None
+    interview_round: Optional[str] = None
+    question_count: Optional[int] = Field(default=5, ge=1, le=20)
+    interview_duration_minutes: Optional[int] = Field(default=None, ge=1, le=240)
     session_metadata: Optional[Dict[str, Any]] = None
 
 
@@ -280,6 +318,7 @@ class ResumeResponse(BaseModel):
     file_name: str
     file_path: str
     resume_text: Optional[str]
+    extraction_status: str
     skills: Optional[List[str]]
     projects: Optional[List[str]]
     experience: Optional[List[Dict[str, Any]]]

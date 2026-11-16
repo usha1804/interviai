@@ -1,10 +1,13 @@
 """ATS Resume Analyzer routes"""
+import logging
+import os
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-import os
 
 from app.database import get_db
 from app.models.models import User, ATSReport, Resume
@@ -12,12 +15,21 @@ from app.utils.auth import get_current_user
 from app.services.ats_service import analyze_ats, generate_ats_pdf
 
 router = APIRouter(prefix="/ats", tags=["ats"])
+logger = logging.getLogger(__name__)
 
 
 class ATSRequest(BaseModel):
-    jd_text: str
+    jd_text: str = Field(..., min_length=1, max_length=15000)
     resume_id: Optional[int] = None
     resume_text: Optional[str] = None
+
+    @field_validator("jd_text")
+    @classmethod
+    def validate_job_description(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Please provide a job description.")
+        return value
 
 
 @router.post("/analyze")
@@ -26,32 +38,46 @@ async def analyze(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    resume_text = body.resume_text or ""
-    resume_id = body.resume_id
-
-    if not resume_text and resume_id:
+    resume = None
+    if body.resume_id is not None:
         resume = db.query(Resume).filter(
-            Resume.id == resume_id, Resume.user_id == current_user.id
+            Resume.id == body.resume_id, Resume.user_id == current_user.id
         ).first()
-        if resume and resume.resume_text:
-            resume_text = resume.resume_text
+        if not resume:
+            raise HTTPException(status_code=404, detail="Selected resume not found.")
+        if not resume.resume_text or not resume.resume_text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="The selected resume has no extracted text. Upload a searchable PDF or DOCX.",
+            )
+        resume_text = resume.resume_text.strip()
+    else:
+        resume_text = (body.resume_text or "").strip()
+    if not resume_text and body.resume_id is None:
+        resume = (
+            db.query(Resume)
+            .filter(
+                Resume.user_id == current_user.id,
+                Resume.resume_text.is_not(None),
+                func.trim(Resume.resume_text) != "",
+            )
+            .order_by(Resume.uploaded_at.desc(), Resume.id.desc())
+            .first()
+        )
+        if resume:
+            resume_text = resume.resume_text.strip()
 
     if not resume_text:
-        resume = db.query(Resume).filter(
-            Resume.user_id == current_user.id
-        ).order_by(Resume.uploaded_at.desc()).first()
-        if resume and resume.resume_text:
-            resume_text = resume.resume_text
-            resume_id = resume.id
-
-    if not resume_text:
-        raise HTTPException(status_code=400, detail="No resume text found. Please upload a resume first.")
+        raise HTTPException(
+            status_code=422,
+            detail="No extracted resume text is available. Upload a searchable PDF or DOCX first.",
+        )
 
     result = analyze_ats(resume_text, body.jd_text)
 
     report = ATSReport(
         user_id=current_user.id,
-        resume_id=resume_id,
+        resume_id=resume.id if resume else None,
         jd_text=body.jd_text[:2000],
         ats_score=result.get("ats_score"),
         keyword_match_pct=result.get("keyword_match_pct"),
@@ -73,7 +99,8 @@ async def analyze(
         report.pdf_path = pdf_path
         db.commit()
     except Exception:
-        pass
+        db.rollback()
+        logger.exception("Could not generate the ATS PDF report for report %s", report.id)
 
     return {**result, "report_id": report.id, "has_pdf": bool(report.pdf_path)}
 

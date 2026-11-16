@@ -251,6 +251,40 @@ Complete interview session and calculate overall score.
 
 ---
 
+## Resume and ATS Endpoints
+
+All endpoints below require the authenticated user's Bearer token.
+
+### Upload Resume
+**POST** `/resume/upload` (`multipart/form-data`, field: `file`)
+
+Accepts searchable PDF or DOCX files up to 5 MB. The uploaded file is associated with the authenticated user, text is extracted and stored, and the response includes `id`, `resume_text`, and `extraction_status` (`completed`). Empty or image-only PDFs return `422` with an OCR/searchable-PDF guidance message. Invalid or unsupported files return `400`.
+
+### Get Latest Resume
+**GET** `/resume/latest`
+
+Returns the latest resume with non-empty extracted text for the authenticated user. Returns `404` when no usable resume is available.
+
+### Analyze Resume
+**POST** `/ats/analyze`
+
+Request:
+```json
+{
+  "resume_id": 12,
+  "jd_text": "The complete job description..."
+}
+```
+
+`resume_id` is optional; when omitted, the endpoint selects the latest resume with extracted text for the authenticated user. A supplied resume ID must belong to that user. Empty job descriptions return `422`; unusable resumes return `422`; a resume ID owned by another user returns `404`.
+
+The response contains the estimated `ats_score`, keyword/skills/experience/education/project match percentages, matched and missing skills and keywords, strengths, weaknesses, improvements, recommended keywords, and `report_id`. When PDF generation succeeds, `has_pdf` is true.
+
+### Download ATS Report
+**GET** `/ats/report/{report_id}/pdf`
+
+Downloads the generated analysis report when available.
+
 ## Analytics Endpoints
 
 ### 1. Get Dashboard

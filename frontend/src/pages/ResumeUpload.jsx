@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 const MAX_SIZE = 5 * 1024 * 1024;
-const ALLOWED = ['pdf', 'docx', 'doc'];
+const ALLOWED = ['pdf', 'docx'];
 
 export const ResumeUpload = () => {
   const navigate = useNavigate();
@@ -123,7 +123,7 @@ export const ResumeUpload = () => {
               <input
                 ref={inputRef}
                 type="file"
-                accept=".pdf,.docx,.doc"
+                accept=".pdf,.docx"
                 className="hidden"
                 onChange={(e) => { if (e.target.files[0]) pickFile(e.target.files[0]); }}
               />

@@ -5,9 +5,9 @@ Uses interview memory + running score to decide next question parameters.
 """
 import json
 from typing import List, Dict, Optional, Tuple
-from groq import Groq
+from fastapi import HTTPException
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 
 DIFFICULTY_LADDER = ["EASY", "MEDIUM", "HARD", "SYSTEM_DESIGN", "LEADERSHIP"]
 DIFFICULTY_UP_THRESHOLD = 7.0    # score >= this → increase difficulty
@@ -54,7 +54,6 @@ def generate_adaptive_question(
     company: Optional[str] = None,
 ) -> str:
     """Generate the next adaptive question using AI."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
     asked_str = "\n".join(f"- {q}" for q in asked_questions[-10:]) or "None"
     weak_str = ", ".join(weak_topics[:5]) or "None identified yet"
     strong_str = ", ".join(strong_topics[:5]) or "None identified yet"
@@ -80,7 +79,13 @@ Rules:
 
 Generate ONE adaptive interview question. Return ONLY the question text."""
 
-    return _chat(client, settings.GROQ_MODEL, prompt, max_tokens=300)
+    response_text = _chat(get_groq_client(), settings.GROQ_MODEL, prompt, max_tokens=300).strip()
+    if len(response_text) < 10:
+        raise HTTPException(status_code=502, detail="Groq returned an unusable adaptive interview question.")
+    asked_normalized = {" ".join(item.casefold().split()) for item in asked_questions}
+    if " ".join(response_text.casefold().split()) in asked_normalized:
+        raise HTTPException(status_code=502, detail="Groq repeated a previous question. Retry to generate a different one.")
+    return response_text
 
 
 def get_adaptive_params(

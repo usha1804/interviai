@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Navbar } from '../components/Navbar';
 import { useNetwork } from '../contexts/NetworkContext';
 import api from '../services/api';
 import { Github, Loader, AlertCircle, Star, GitFork, Code2, Zap, ExternalLink } from 'lucide-react';
@@ -40,7 +39,6 @@ export const GitHubAnalyzer = () => {
 
   return (
     <>
-      <Navbar />
       <div className="min-h-screen bg-slate-950 py-8 px-4">
         <div className="mx-auto max-w-4xl">
           <div className="mb-8 text-center">

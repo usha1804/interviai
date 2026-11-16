@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Database Configuration
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "mysql+pymysql://root:password@localhost:3306/interviai"
+        "mysql+pymysql://root:root@localhost:3306/interviai"
     )
     
     # JWT Configuration
@@ -37,7 +37,13 @@ class Settings(BaseSettings):
     
     # Groq API Configuration
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    REPORT_MAX_PROMPT_CHARS: int = 22000
+    REPORT_MAX_INPUT_TOKENS: int = 7000
+    REPORT_MAX_PAYLOAD_BYTES: int = 32000
+    REPORT_MAX_ANSWER_CHARS: int = 6000
+    REPORT_MAX_BATCH_ANSWERS: int = 6
+    REPORT_MAX_CONTEXT_CHARS: int = 1400
 
     # Judge0 API Configuration (get free key at rapidapi.com/judge0-official)
     JUDGE0_API_KEY: str = os.getenv("JUDGE0_API_KEY", "your-judge0-key")

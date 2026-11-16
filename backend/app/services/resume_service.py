@@ -5,9 +5,8 @@ import os
 from typing import Optional
 from fastapi import HTTPException
 
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 from app.config import settings
-from groq import Groq
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -27,7 +26,25 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
     try:
         from docx import Document
         doc = Document(io.BytesIO(file_bytes))
-        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        text_parts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        for section in doc.sections:
+            for part in (section.header, section.footer):
+                text_parts.extend(
+                    paragraph.text.strip()
+                    for paragraph in part.paragraphs
+                    if paragraph.text.strip()
+                )
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    cell_text = "\n".join(
+                        paragraph.text.strip()
+                        for paragraph in cell.paragraphs
+                        if paragraph.text.strip()
+                    )
+                    if cell_text:
+                        text_parts.append(cell_text)
+        return "\n".join(text_parts).strip()
     except ImportError:
         raise HTTPException(status_code=500, detail="python-docx not installed. Run: pip install python-docx")
     except Exception as e:
@@ -47,7 +64,7 @@ def extract_text(file_bytes: bytes, content_type: str, filename: str) -> str:
 
 def parse_resume_with_ai(resume_text: str) -> dict:
     """Use Groq to extract structured data from raw resume text."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     prompt = f"""You are an expert resume parser.
 
@@ -90,7 +107,7 @@ Return ONLY this JSON (no extra text):
 
 def generate_resume_questions(parsed_data: dict, difficulty: str = "MEDIUM") -> dict:
     """Generate interview questions strictly based on resume content."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     skills = ", ".join(parsed_data.get("skills", []) + parsed_data.get("technologies", []))
     projects = ", ".join(parsed_data.get("projects", []))

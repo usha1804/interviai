@@ -92,23 +92,24 @@ async def text_to_speech(text: str, session_id: int, index: int) -> Tuple[str, s
 
 
 def _guess_audio_extension(audio_bytes: bytes) -> str:
-    """Guess audio file extension from magic bytes."""
+    """Return a supported container extension based on its file signature."""
     if audio_bytes.startswith(b'RIFF'):
         return '.wav'
     if audio_bytes.startswith(b'OggS'):
         return '.ogg'
     if audio_bytes.startswith(b'ID3') or audio_bytes[0:2] == b'\xFF\xFB':
         return '.mp3'
-    if audio_bytes[4:8] == b'ftyp':
+    if len(audio_bytes) >= 8 and audio_bytes[4:8] == b'ftyp':
         return '.mp4'
     if audio_bytes.startswith(b'\x1A\x45\xDF\xA3'):
         return '.webm'
-    # Fallback to WAV so whisper can still attempt to decode it
-    return '.wav'
+    raise ValueError("Unsupported audio format. Upload WebM, Ogg, MP4, WAV, or MP3 audio.")
 
 
 def speech_to_text(audio_bytes: bytes) -> Dict:
     """Transcribe audio bytes using faster-whisper. Returns transcript + metadata."""
+    if not audio_bytes:
+        raise ValueError("Audio recording is empty.")
     ext = _guess_audio_extension(audio_bytes)
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
         f.write(audio_bytes)
@@ -118,6 +119,8 @@ def speech_to_text(audio_bytes: bytes) -> Dict:
         model = _get_whisper()
         segments, info = model.transcribe(tmp_path, beam_size=5)
         transcript = " ".join(seg.text.strip() for seg in segments)
+        if not transcript.strip():
+            raise ValueError("No speech could be recognized in the audio recording.")
         duration = info.duration if hasattr(info, "duration") else 0
         return {
             "transcript": transcript,

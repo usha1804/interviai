@@ -8,9 +8,8 @@ face metrics, fullscreen exits) and computes:
   - AI Feedback       (Groq generated HR assessment)
 """
 import json
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 
 
 def compute_proctoring_score(violations: dict) -> float:
@@ -52,7 +51,7 @@ def compute_confidence_score(metrics: dict) -> dict:
 
 
 def generate_proctoring_feedback(scores: dict, violations: dict, session_type: str) -> dict:
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
     prompt = f"""You are an expert HR Interview Assessor reviewing a candidate's interview integrity and behaviour.
 
 Session Type: {session_type}
@@ -98,7 +97,7 @@ Return ONLY this JSON:
 
 def generate_readiness_report(scores: dict) -> dict:
     """Generate final Interview Readiness Report combining all scores."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     prompt = f"""You are an expert Interview Coach generating a final readiness report.
 

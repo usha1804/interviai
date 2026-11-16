@@ -10,9 +10,8 @@ to this service which:
 """
 import json
 from typing import Optional
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 
 
 def compute_scores(metrics: dict) -> dict:
@@ -48,7 +47,7 @@ def compute_scores(metrics: dict) -> dict:
 
 def generate_behavior_feedback(scores: dict) -> dict:
     """Use Groq to generate HR-style behavioral feedback from scores."""
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
 
     prompt = f"""You are an expert HR Interview Coach analyzing a candidate's interview behavior.
 

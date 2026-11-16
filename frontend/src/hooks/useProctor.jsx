@@ -11,7 +11,7 @@ import { Eye, Shield, AlertTriangle, CameraOff } from 'lucide-react';
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const jitter = (r) => (Math.random() - 0.5) * r * 2;
 
-export function useProctor(sessionKey, sessionType) {
+export function useProctor(sessionKey, sessionType, enabled = true) {
   const webcamRef = useRef(null);
   const started = useRef(false);
 
@@ -38,12 +38,12 @@ export function useProctor(sessionKey, sessionType) {
 
   // Start proctoring session on backend
   useEffect(() => {
-    if (!sessionKey || started.current) return;
+    if (!enabled || !sessionKey || started.current) return;
     started.current = true;
     proctorService.start({ session_key: sessionKey, session_type: sessionType })
       .then(() => setProcStarted(true))
       .catch(() => setProcStarted(true));
-  }, [sessionKey, sessionType]);
+  }, [enabled, sessionKey, sessionType]);
 
   // Live metric simulation
   useEffect(() => {
@@ -165,7 +165,7 @@ export function useProctor(sessionKey, sessionType) {
   };
 
   // Compact overlay — fixed top-right corner
-  const ProctorOverlay = () => (
+  const ProctorOverlay = () => !enabled ? null : (
     <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 items-end pointer-events-none">
       {/* Camera PiP */}
       <div className="w-36 h-24 rounded-xl overflow-hidden border-2 border-slate-700 bg-slate-900 shadow-xl pointer-events-auto relative">

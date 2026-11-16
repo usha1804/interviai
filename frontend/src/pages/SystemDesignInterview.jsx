@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Navbar } from '../components/Navbar';
 import { useNetwork } from '../contexts/NetworkContext';
 import api from '../services/api';
 import {
@@ -77,7 +76,6 @@ export const SystemDesignInterview = () => {
   // ── Topic Selection ──
   if (phase === PHASES.SELECT) return (
     <>
-      <Navbar />
       <div className="min-h-screen bg-slate-950 py-8 px-4">
         <div className="mx-auto max-w-4xl">
           <div className="mb-8 text-center">
@@ -124,7 +122,6 @@ export const SystemDesignInterview = () => {
     const q = questions[currentIdx];
     return (
       <>
-        <Navbar />
         <div className="min-h-screen bg-slate-950 py-8 px-4">
           <div className="mx-auto max-w-3xl">
             <div className="mb-4 flex items-center justify-between">
@@ -185,7 +182,6 @@ export const SystemDesignInterview = () => {
   // ── Report Phase ──
   return (
     <>
-      <Navbar />
       <div className="min-h-screen bg-slate-950 py-8 px-4">
         <div className="mx-auto max-w-3xl">
           <div className="text-center mb-8">

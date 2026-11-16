@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await authService.login({ email, password });
+      const response = await authService.login({ email: email.trim(), password });
       localStorage.setItem('accessToken', response.data.access_token);
       localStorage.setItem('refreshToken', response.data.refresh_token || '');
 
@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await authService.register(data);
+      const response = await authService.register({ ...data, email: data.email.trim() });
       localStorage.setItem('accessToken', response.data.access_token);
       localStorage.setItem('refreshToken', response.data.refresh_token || '');
 

@@ -7,9 +7,8 @@ import json
 import re
 from typing import Dict, List, Optional
 import requests
-from groq import Groq
 from app.config import settings
-from app.services.ai_service import _chat
+from app.services.ai_service import _chat, get_groq_client
 
 GITHUB_API = "https://api.github.com"
 
@@ -92,7 +91,7 @@ def analyze_github(github_url: str) -> Dict:
     if "error" in data:
         return data
 
-    client = Groq(api_key=settings.GROQ_API_KEY)
+    client = get_groq_client()
     repos_summary = json.dumps(data["top_repos"][:8], indent=2)
 
     prompt = f"""You are a Senior Software Engineer evaluating a developer's GitHub portfolio.
