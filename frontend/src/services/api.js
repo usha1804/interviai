@@ -1,12 +1,33 @@
+// import axios from 'axios';
+
+// const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// const api = axios.create({
+//   baseURL: API_URL,
+//   headers: { 'Content-Type': 'application/json' },
+//   timeout: 15000,
+// });
+
+
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL;
+
+if (!API_URL && import.meta.env.PROD) {
+  throw new Error('VITE_API_URL is missing from the production environment.');
+}
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL || 'http://localhost:8000',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
+
+
+
+
+
+
 
 // ── Request interceptor: attach token ────────────────────────────
 api.interceptors.request.use(
