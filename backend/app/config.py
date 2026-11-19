@@ -60,16 +60,26 @@ class Settings(BaseSettings):
     )
     
     # CORS Configuration
+    # CORS_ORIGINS: list = _load_list(
+    #     os.getenv(
+    #         "CORS_ORIGINS",
+    #         "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,https://your-frontend-domain.com",
+    #     ),
+    #     [
+    #         "http://localhost:3000",
+    #         "http://localhost:5173",
+    #         "http://127.0.0.1:5173",
+    #         "https://your-frontend-domain.com",
+    #     ],
+    # )
+          # CORS Configuration
     CORS_ORIGINS: list = _load_list(
-        os.getenv(
-            "CORS_ORIGINS",
-            "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,https://your-frontend-domain.com",
-        ),
+        os.getenv("CORS_ORIGINS"),
         [
             "http://localhost:3000",
             "http://localhost:5173",
             "http://127.0.0.1:5173",
-            "https://your-frontend-domain.com",
+            "https://interviai-scv2.vercel.app",
         ],
     )
     
