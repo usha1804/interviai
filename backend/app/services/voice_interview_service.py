@@ -10,8 +10,9 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import traceback
-import wave
+import uuid
 from typing import Dict, List, Optional, Tuple
 
 FILLER_WORDS = [
@@ -23,36 +24,43 @@ AUDIO_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "audio_cache")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 _whisper_model = None
+_whisper_init_lock = threading.Lock()
+_whisper_transcribe_lock = threading.Lock()
+MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 
 def _get_whisper():
     global _whisper_model
     if _whisper_model is None:
-        from faster_whisper import WhisperModel
-        _whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
+        with _whisper_init_lock:
+            if _whisper_model is None:
+                from faster_whisper import WhisperModel
+                cpu_threads = max(1, min(4, os.cpu_count() or 1))
+                _whisper_model = WhisperModel(
+                    "tiny.en",
+                    device="cpu",
+                    compute_type="int8",
+                    cpu_threads=cpu_threads,
+                )
     return _whisper_model
 
 
 async def text_to_speech(text: str, session_id: int, index: int) -> Tuple[str, str]:
     """Convert text to speech using edge-tts. Returns path to audio file and MIME type."""
-    filename = f"tts_{session_id}_{index}.mp3"
+    filename = f"tts_{session_id}_{index}_{uuid.uuid4().hex}.mp3"
     path = os.path.join(AUDIO_DIR, filename)
 
-    # Prefer edge-tts when available; fall back to gTTS if not installed.
+    if not text or not text.strip():
+        raise ValueError("Text-to-speech requires non-empty text.")
+
+    # Prefer edge-tts, then gTTS. Never replace failed speech with silent audio.
     try:
         import edge_tts
     except Exception:
         try:
             from gtts import gTTS
-        except Exception:
-            # Fallback: generate a short silent WAV so the endpoint still succeeds.
-            wav_path = os.path.splitext(path)[0] + ".wav"
-            with wave.open(wav_path, "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(22050)
-                wf.writeframes(b"\x00\x00" * 22050)
-            return wav_path, "audio/wav"
+        except Exception as exc:
+            raise RuntimeError("No text-to-speech provider is available.") from exc
 
         # Use gTTS synchronously in a thread
         def _save_gtts(text, out_path):
@@ -61,7 +69,9 @@ async def text_to_speech(text: str, session_id: int, index: int) -> Tuple[str, s
 
         try:
             await asyncio.to_thread(_save_gtts, text, path)
-            return path, "audio/mpeg"
+            if os.path.isfile(path) and os.path.getsize(path) > 1024:
+                return path, "audio/mpeg"
+            raise RuntimeError("gTTS produced an empty audio file.")
         except Exception as e:
             raise RuntimeError(f"gTTS TTS processing failed: {e}")
 
@@ -69,6 +79,8 @@ async def text_to_speech(text: str, session_id: int, index: int) -> Tuple[str, s
     try:
         communicate = edge_tts.Communicate(text, voice="en-US-AriaNeural")
         await communicate.save(path)
+        if not os.path.isfile(path) or os.path.getsize(path) < 1024:
+            raise RuntimeError("Edge TTS produced an empty audio file.")
         return path, "audio/mpeg"
     except Exception as exc:
         logging.error("edge-tts conversion failed: %s", traceback.format_exc())
@@ -78,17 +90,12 @@ async def text_to_speech(text: str, session_id: int, index: int) -> Tuple[str, s
                 tts = gTTS(text=text, lang='en')
                 tts.save(out_path)
             await asyncio.to_thread(_save_gtts, text, path)
-            return path, "audio/mpeg"
+            if os.path.isfile(path) and os.path.getsize(path) > 1024:
+                return path, "audio/mpeg"
+            raise RuntimeError("gTTS produced an empty audio file.")
         except Exception as gtts_exc:
             logging.error("gTTS fallback failed: %s", traceback.format_exc())
-            # Fallback to silent WAV on edge-tts + gTTS failure.
-            wav_path = os.path.splitext(path)[0] + ".wav"
-            with wave.open(wav_path, "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(22050)
-                wf.writeframes(b"\x00\x00" * 22050)
-            return wav_path, "audio/wav"
+            raise RuntimeError("All text-to-speech providers failed.") from gtts_exc
 
 
 def _guess_audio_extension(audio_bytes: bytes) -> str:
@@ -99,7 +106,7 @@ def _guess_audio_extension(audio_bytes: bytes) -> str:
         return '.ogg'
     if audio_bytes.startswith(b'ID3') or audio_bytes[0:2] == b'\xFF\xFB':
         return '.mp3'
-    if len(audio_bytes) >= 8 and audio_bytes[4:8] == b'ftyp':
+    if len(audio_bytes) >= 12 and audio_bytes[4:8] == b'ftyp':
         return '.mp4'
     if audio_bytes.startswith(b'\x1A\x45\xDF\xA3'):
         return '.webm'
@@ -110,6 +117,8 @@ def speech_to_text(audio_bytes: bytes) -> Dict:
     """Transcribe audio bytes using faster-whisper. Returns transcript + metadata."""
     if not audio_bytes:
         raise ValueError("Audio recording is empty.")
+    if len(audio_bytes) > MAX_AUDIO_BYTES:
+        raise ValueError("Audio recording exceeds the 8 MB upload limit.")
     ext = _guess_audio_extension(audio_bytes)
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
         f.write(audio_bytes)
@@ -117,7 +126,13 @@ def speech_to_text(audio_bytes: bytes) -> Dict:
 
     try:
         model = _get_whisper()
-        segments, info = model.transcribe(tmp_path, beam_size=5)
+        with _whisper_transcribe_lock:
+            segments, info = model.transcribe(
+                tmp_path,
+                beam_size=1,
+                vad_filter=True,
+                condition_on_previous_text=False,
+            )
         transcript = " ".join(seg.text.strip() for seg in segments)
         if not transcript.strip():
             raise ValueError("No speech could be recognized in the audio recording.")

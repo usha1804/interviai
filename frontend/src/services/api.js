@@ -1,14 +1,3 @@
-// import axios from 'axios';
-
-// const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-// const api = axios.create({
-//   baseURL: API_URL,
-//   headers: { 'Content-Type': 'application/json' },
-//   timeout: 15000,
-// });
-
-
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -202,8 +191,7 @@ export const voiceService = {
   getSession: (sessionId) => api.get(`/voice/session/${sessionId}`),
   tts: (data) => api.post('/voice/tts', data, { responseType: 'blob' }),
   stt: (sessionId, formData) => api.post(`/voice/stt/${sessionId}`, formData, {
-    headers: { 'Content-Type': undefined },
-    timeout: 120000,
+    timeout: 75000,
   }),
   retryEvaluation: (sessionId) => api.post(`/voice/evaluate/${sessionId}`, {}, { timeout: 75000 }),
   next: (sessionId) => api.post(`/voice/next/${sessionId}`, {}, { timeout: 75000 }),

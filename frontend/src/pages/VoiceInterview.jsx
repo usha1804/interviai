@@ -15,6 +15,11 @@ const getErrorMessage = (err) => {
   const detail = err?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) return detail.map(item => item?.msg || item).join(', ');
+  if (err?.response?.status === 413) return 'The recording is too large. Record a shorter answer and retry.';
+  if (err?.response?.status === 422) return 'No speech was recognized. Please record your answer again.';
+  if (err?.response?.status === 504) return 'Speech transcription timed out. Please retry.';
+  if (err?.response?.status === 503) return 'The voice service is temporarily unavailable. Please retry.';
+  if (err?.response?.status === 429) return 'Too many requests. Please wait briefly and retry.';
   return err?.message || 'Something went wrong.';
 };
 
@@ -41,6 +46,7 @@ export const VoiceInterview = () => {
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [operationState, setOperationState] = useState('ready');
   const [recordedAudio, setRecordedAudio] = useState(null);
   const [recordingUrl, setRecordingUrl] = useState('');
   const [microphoneState, setMicrophoneState] = useState('not requested');
@@ -323,6 +329,7 @@ export const VoiceInterview = () => {
     }
     submitLockRef.current = true;
     setProcessing(true);
+    setOperationState('uploading');
     setError('');
     try {
       const type = recordedAudio.type || 'audio/webm';
@@ -350,6 +357,7 @@ export const VoiceInterview = () => {
     } finally {
       setProcessing(false);
       submitLockRef.current = false;
+      setOperationState('ready');
     }
   };
 
@@ -494,7 +502,11 @@ export const VoiceInterview = () => {
           <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <span className={`text-sm font-medium ${recording ? 'text-red-400' : 'text-slate-400'}`}>
-                {recording ? `● Recording · ${Math.floor(recordingSeconds / 60)}:${String(recordingSeconds % 60).padStart(2, '0')}` : 'Microphone ready'}
+                {recording
+                  ? `● Recording · ${Math.floor(recordingSeconds / 60)}:${String(recordingSeconds % 60).padStart(2, '0')}`
+                  : processing
+                    ? (operationState === 'uploading' ? 'Uploading and transcribing...' : 'Processing...')
+                    : 'Microphone ready'}
               </span>
               <span className="text-xs text-slate-500">Permission: {microphoneState}</span>
             </div>

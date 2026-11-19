@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ from app.utils.auth import get_current_user
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/voice", tags=["voice"])
 MAX_QUESTIONS = 5
+MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 
 class StartVoiceRequest(BaseModel):
@@ -63,6 +64,14 @@ def _session_for_user(db: Session, session_id: int, user_id: int) -> VoiceInterv
     if not session:
         raise HTTPException(status_code=404, detail="Voice interview session not found.")
     return session
+
+
+def _delete_tts_file(path: str):
+    try:
+        if path:
+            os.unlink(path)
+    except FileNotFoundError:
+        pass
 
 
 def _category(transcript: list) -> str:
@@ -398,17 +407,22 @@ async def get_voice_session(
 
 
 @router.post("/tts")
-async def tts(body: TTSRequest, current_user: User = Depends(get_current_user)):
+async def tts(
+    body: TTSRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+):
     try:
         path, media_type = await asyncio.wait_for(
             text_to_speech(body.text, body.session_id, body.index), timeout=45
         )
+        background_tasks.add_task(_delete_tts_file, path)
         return FileResponse(path, media_type=media_type, filename=os.path.basename(path))
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Text-to-speech timed out.") from exc
     except Exception as exc:
         logger.exception("Voice TTS failed")
-        raise HTTPException(status_code=502, detail="Could not generate spoken audio for the question.") from exc
+        raise HTTPException(status_code=503, detail="Could not generate spoken audio for the question.") from exc
 
 
 @router.post("/stt/{session_id}")
@@ -429,9 +443,11 @@ async def stt(
         raise HTTPException(status_code=409, detail="This voice interview is already completed.")
     if audio is None:
         raise HTTPException(status_code=400, detail="Audio file is required. Record an answer before submitting.")
-    audio_bytes = await audio.read()
+    audio_bytes = await audio.read(MAX_AUDIO_BYTES + 1)
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="The audio recording is empty.")
+    if len(audio_bytes) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail="The audio recording exceeds the 8 MB upload limit.")
     if audio.content_type and not (
         audio.content_type.startswith("audio/")
         or audio.content_type == "application/octet-stream"
@@ -494,10 +510,17 @@ async def stt(
         raise HTTPException(status_code=500, detail="Could not begin processing this answer. Please retry.") from exc
 
     try:
-        stt_result = await asyncio.wait_for(asyncio.to_thread(speech_to_text, audio_bytes), timeout=90)
+        stt_result = await asyncio.wait_for(asyncio.to_thread(speech_to_text, audio_bytes), timeout=60)
     except ValueError as exc:
         _reset_question_submission(session, question_id, db)
-        raise HTTPException(status_code=415, detail=str(exc)) from exc
+        message = str(exc)
+        if "No speech" in message:
+            raise HTTPException(status_code=422, detail=message) from exc
+        if "empty" in message.casefold():
+            raise HTTPException(status_code=400, detail=message) from exc
+        if "8 MB" in message:
+            raise HTTPException(status_code=413, detail=message) from exc
+        raise HTTPException(status_code=415, detail=message) from exc
     except asyncio.TimeoutError as exc:
         _reset_question_submission(session, question_id, db)
         raise HTTPException(status_code=504, detail="Speech transcription timed out. Please retry.") from exc

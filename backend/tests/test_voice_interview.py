@@ -295,3 +295,30 @@ def test_rate_limited_evaluation_can_be_retried_without_reuploading_audio(voice_
     with test_session() as db:
         saved = db.query(VoiceInterviewSession).one()
         assert sum(turn["role"] == "candidate" for turn in saved.transcript) == 1
+
+
+def test_audio_upload_limit_is_rejected(voice_client, monkeypatch):
+    http, _, _ = voice_client
+    started = start_voice(http, monkeypatch)
+    oversized = b"\x1a\x45\xdf\xa3" + (b"x" * (8 * 1024 * 1024))
+    response = http.post(
+        f"/voice/stt/{started.json()['session_id']}",
+        files={"audio": ("answer.webm", oversized, "audio/webm")},
+    )
+    assert response.status_code == 413
+    assert "8 MB" in response.json()["detail"]
+
+
+def test_audio_signature_formats_and_no_speech_errors():
+    from app.services.voice_interview_service import (
+        MAX_AUDIO_BYTES,
+        _guess_audio_extension,
+        speech_to_text,
+    )
+
+    assert _guess_audio_extension(b"RIFFxxxx") == ".wav"
+    assert _guess_audio_extension(b"OggSxxxx") == ".ogg"
+    assert _guess_audio_extension(b"ID3xxxx") == ".mp3"
+    assert _guess_audio_extension(b"\x1a\x45\xdf\xa3xxxx") == ".webm"
+    with pytest.raises(ValueError, match="exceeds"):
+        speech_to_text(b"\x1a\x45\xdf\xa3" + (b"x" * MAX_AUDIO_BYTES))
